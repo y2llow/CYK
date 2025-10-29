@@ -1,17 +1,10 @@
-#include <iostream>
-// #include "CFG.h"
-#include "include/PDA.h"
+#include "include/CFG.h"
+
 using namespace std;
 
 int main() {
-    PDA pda("/home/y2llow/CLionProjects/MB_ProgrammeerOpdrachten/input/input-pda2cfg1.json");
-    pda.toCFG().print();
+    CFG cfg("input-cyk1.json");
+    cfg.accepts("baaba"); //moet true geven
+    cfg.accepts("abba"); //moet false geven
     return 0;
 }
-
-// using namespace std;
-// int main() {
-//     CFG cfg("/home/y2llow/CLionProjects/MB_ProgrammeerOpdrachten/CFG.json");
-//     cfg.print();
-//     return 0;
-// }

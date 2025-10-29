@@ -18,7 +18,9 @@ public:
     explicit CFG(const string &filename);
     CFG () = default;
 
-     void print() const;
+    void print() const;
+
+    void accepts(string input);
 };
 
 #endif

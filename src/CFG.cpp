@@ -8,26 +8,31 @@
 using json = nlohmann::json;
 
 CFG::CFG(const string &filename) {
-    // JSON-bestand openen
-    ifstream input(filename);
+    std::ifstream input(filename);
     if (!input.is_open()) {
-        cerr << "Fout: kon bestand '" << filename << "' niet openen." << endl;
+        std::cerr << "Fout: kon bestand '" << filename << "' niet openen." << std::endl;
         return;
     }
 
     json j;
     input >> j;
 
-    // Variabelen en terminals inlezen
+    // Variabelen (as vector<vector<string>>)
     if (j.contains("Variables") && j["Variables"].is_array()) {
-        for (const auto &v : j["Variables"]) V.push_back(v.get<vector<string>>());
+        for (const auto &v : j["Variables"]) {
+            // Each variable is a string, but we wrap it inside a vector<string>
+            V.push_back({v.get<string>()});
+        }
     }
 
+    // Terminals
     if (j.contains("Terminals") && j["Terminals"].is_array()) {
-        for (const auto &t : j["Terminals"]) T.push_back(t.get<string>());
+        for (const auto &t : j["Terminals"]) {
+            T.push_back(t.get<string>());
+        }
     }
 
-    // Producties inlezen
+    // Producties
     if (j.contains("Productions") && j["Productions"].is_array()) {
         for (const auto &prod : j["Productions"]) {
             string head = prod["head"].get<string>();
@@ -39,7 +44,7 @@ CFG::CFG(const string &filename) {
                 }
             }
 
-            // Voeg toe aan producties
+            // Now we wrap both the head and body in extra vectors to match your map type
             P[{head}].push_back({body});
         }
     }
@@ -167,3 +172,71 @@ void CFG::print() const {
     std::cout << out.str() << std::endl;
 }
 
+void CFG::accepts(string input) {
+    // splits input up letter per letter
+    vector<string> inputChar; // Declare the vector of strings
+    for (char c : input) {
+        inputChar.emplace_back(1, c); // Create a string with one character and push it back
+    }
+
+    // Maak een nieuwe vector voor de eerste lijn van de CYK en reserveer ruimte
+    vector<vector<string>> CYK_line1(inputChar.size()); // Reserve space for each input character
+
+    // Nu kun je veilig elementen toevoegen
+    for (int _i = 0; _i < inputChar.size(); ++_i) {
+        for (const auto& transities : this->P) {
+            for (auto& trans : transities.second) {
+                if (trans[0][0] == inputChar[_i]) {  // Vergelijk de eerste letter van de transitie
+                    CYK_line1[_i].push_back(transities.first[0]);  // Voeg de transitie toe
+                }
+            }
+        }
+    }
+
+    // De 2de lijn van de CYK
+    vector<vector<string>> CYK_line2(inputChar.size() ); // Reserve space for each input character
+    vector <vector<vector<string>>> SuperCombinaties;
+
+    for (int _i = 0; _i < CYK_line2.size(); ++_i) {
+        vector <vector<string>> Combinaties;
+        for (int i = 0; i < CYK_line1[_i].size(); ++i) {
+            for (int j = 0; j < CYK_line1[_i + 1].size(); ++j) {
+                vector <string> temp;
+                temp.push_back(CYK_line1[_i][i]);
+                temp.push_back(CYK_line1[_i + 1][j]);
+                Combinaties.emplace_back(temp);
+            }
+        }
+        SuperCombinaties.push_back(Combinaties);
+    }
+
+    // De 3de lijn van de CYK
+    vector<vector<string>> CYK_line3(inputChar.size() - 1); // Reserve space for each input character
+
+    // Nu gaan we door de combinaties om te kijken of er matches zijn met de transities
+    for (int __i = 0; __i < CYK_line2.size(); ++__i) {
+        for (const auto& transities : this->P) {
+            for (auto& trans : transities.second) {
+                for (int c = 0; c < SuperCombinaties.size(); ++c) {
+                    // Loop door de transities
+                    for (int i = 0; i < trans.size(); ++i) {
+                        for (int j = 0; j < trans[i].size() - 1; ++j) {
+                            // Vergelijk alle combinaties met alle transities
+                            for (int _i = 0; _i < SuperCombinaties[c].size(); ++_i) {
+                                for (int _j = 0; _j < SuperCombinaties[c][_i].size() - 1; ++_j) {
+                                    if (trans[i][j] == SuperCombinaties[c][_i][_j] &&
+                                        trans[i][j + 1] == SuperCombinaties[c][_i][_j + 1]) {
+                                        CYK_line3[c].push_back(transities.first[__i]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return;
+
+}
