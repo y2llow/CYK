@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iostream>
+#include <set>
 
 using json = nlohmann::json;
 
@@ -172,62 +173,145 @@ void CFG::print() const {
     std::cout << out.str() << std::endl;
 }
 
+// void CFG::accepts(string input) {
+//     int n = input.length();
+//
+//     // CYK tabel: table[i][j] bevat de set van variabelen die substring vanaf i met lengte j+1 kunnen afleiden
+//     vector table(n, vector<set<string>>(n));
+//
+//     // Stap 1: Vul de eerste rij (substrings van lengte 1)
+//     for (int i = 0; i < n; i++) {
+//         string symbol(1, input[i]);
+//
+//         // Zoek alle variabelen die deze terminal kunnen afleiden
+//         for (const auto& production : P) {
+//             string var = production.first[0];
+//             for (const auto& body : production.second) {
+//                 // Check voor unit productie: A -> a
+//                 if (body.size() == 1 && body[0].size() == 1 && body[0][0] == symbol) {
+//                     table[i][0].insert(var);
+//                 }
+//             }
+//         }
+//     }
+//
+//     // Stap 2: Vul de rest van de tabel (substrings van lengte 2 tot n)
+//     for (int length = 2; length <= n; length++) {
+//         for (int i = 0; i <= n - length; i++) {
+//             int j = length - 1;
+//
+//             // Splits de substring op alle mogelijke manieren
+//             for (int k = 0; k < length - 1; k++) {
+//                 // Linker deel: table[i][k]
+//                 // Rechter deel: table[i+k+1][j-k-1]
+//
+//                 set<string>& left = table[i][k];
+//                 set<string>& right = table[i + k + 1][j - k - 1];
+//
+//                 // Zoek producties A -> BC waar B in left en C in right
+//                 for (const auto& production : P) {
+//                     string var = production.first[0];
+//                     for (const auto& body : production.second) {
+//                         // Check voor binaire productie: A -> B C
+//                         if (body.size() == 1 && body[0].size() == 2) {
+//                             string B = body[0][0];
+//                             string C = body[0][1];
+//
+//                             if (left.count(B) && right.count(C)) {
+//                                 table[i][j].insert(var);
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//
+//     // Print de tabel
+//     for (int j = n - 1; j >= 0; j--) {
+//         for (int i = 0; i <= n - j - 1; i++) {
+//             cout << "| {";
+//             bool first = true;
+//             vector<string> sorted_vars(table[i][j].begin(), table[i][j].end());
+//             sort(sorted_vars.begin(), sorted_vars.end());
+//             for (const string& var : sorted_vars) {
+//                 if (!first) cout << ", ";
+//                 cout << var;
+//                 first = false;
+//             }
+//             cout << "}  ";
+//         }
+//         cout << "|\n";
+//     }
+//
+//     // Check of het startsymbool in de top cel zit
+//     bool accepted = table[0][n - 1].count(S) > 0;
+//     cout << (accepted ? "true" : "false") << endl;
+// }
+
 void CFG::accepts(string input) {
     // splits input up letter per letter
-    vector<string> inputChar; // Declare the vector of strings
+    vector<string> inputChar;
     for (char c : input) {
-        inputChar.emplace_back(1, c); // Create a string with one character and push it back
+        inputChar.emplace_back(1, c);
     }
 
-    // Maak een nieuwe vector voor de eerste lijn van de CYK en reserveer ruimte
-    vector<vector<string>> CYK_line1(inputChar.size()); // Reserve space for each input character
+    int n = inputChar.size();
 
-    // Nu kun je veilig elementen toevoegen
+    // Maak de CYK tabel: CYK_table[length][start_pos]
+    vector<vector<vector<string>>> CYK_table(n);
+    for (int i = 0; i < n; ++i) {
+        CYK_table[i].resize(n - i);
+    }
+
+    // Lijn 1 van de CYK: vul de basis (lengte 1)
     for (int _i = 0; _i < inputChar.size(); ++_i) {
         for (const auto& transities : this->P) {
             for (auto& trans : transities.second) {
-                if (trans[0][0] == inputChar[_i]) {  // Vergelijk de eerste letter van de transitie
-                    CYK_line1[_i].push_back(transities.first[0]);  // Voeg de transitie toe
+                // Check voor unit productie A -> a
+                if (trans.size() == 1 && trans[0].size() == 1 && trans[0][0] == inputChar[_i]) {
+                    CYK_table[0][_i].push_back(transities.first[0]);
                 }
             }
         }
     }
 
-    // De 2de lijn van de CYK
-    vector<vector<string>> CYK_line2(inputChar.size() ); // Reserve space for each input character
-    vector <vector<vector<string>>> SuperCombinaties;
+    // Vul de rest van de CYK tabel (lengtes 2 tot n)
+    for (int length = 2; length <= n; ++length) {
+        for (int start = 0; start <= n - length; ++start) {
+            // Voor elke mogelijke split van de substring
+            for (int split = 1; split < length; ++split) {
+                int left_length = split;
+                int right_length = length - split;
+                int right_start = start + split;
 
-    for (int _i = 0; _i < CYK_line2.size(); ++_i) {
-        vector <vector<string>> Combinaties;
-        for (int i = 0; i < CYK_line1[_i].size(); ++i) {
-            for (int j = 0; j < CYK_line1[_i + 1].size(); ++j) {
-                vector <string> temp;
-                temp.push_back(CYK_line1[_i][i]);
-                temp.push_back(CYK_line1[_i + 1][j]);
-                Combinaties.emplace_back(temp);
-            }
-        }
-        SuperCombinaties.push_back(Combinaties);
-    }
+                // Haal de linker en rechter delen op
+                vector<string>& left = CYK_table[left_length - 1][start];
+                vector<string>& right = CYK_table[right_length - 1][right_start];
 
-    // De 3de lijn van de CYK
-    vector<vector<string>> CYK_line3(inputChar.size() - 1); // Reserve space for each input character
+                // Maak combinaties van linker en rechter variabelen
+                vector<vector<string>> Combinaties;
+                for (int i = 0; i < left.size(); ++i) {
+                    for (int j = 0; j < right.size(); ++j) {
+                        vector<string> temp;
+                        temp.push_back(left[i]);
+                        temp.push_back(right[j]);
+                        Combinaties.push_back(temp);
+                    }
+                }
 
-    // Nu gaan we door de combinaties om te kijken of er matches zijn met de transities
-    for (int __i = 0; __i < CYK_line2.size(); ++__i) {
-        for (const auto& transities : this->P) {
-            for (auto& trans : transities.second) {
-                for (int c = 0; c < SuperCombinaties.size(); ++c) {
-                    // Loop door de transities
-                    for (int i = 0; i < trans.size(); ++i) {
-                        for (int j = 0; j < trans[i].size() - 1; ++j) {
-                            // Vergelijk alle combinaties met alle transities
-                            for (int _i = 0; _i < SuperCombinaties[c].size(); ++_i) {
-                                for (int _j = 0; _j < SuperCombinaties[c][_i].size() - 1; ++_j) {
-                                    if (trans[i][j] == SuperCombinaties[c][_i][_j] &&
-                                        trans[i][j + 1] == SuperCombinaties[c][_i][_j + 1]) {
-                                        CYK_line3[c].push_back(transities.first[__i]);
-                                    }
+                // Check welke producties deze combinaties kunnen maken
+                for (const auto& transities : this->P) {
+                    for (auto& trans : transities.second) {
+                        // Check voor binaire productie A -> BC
+                        if (trans.size() == 1 && trans[0].size() == 2) {
+                            string B = trans[0][0];
+                            string C = trans[0][1];
+
+                            // Vergelijk met alle combinaties
+                            for (int _i = 0; _i < Combinaties.size(); ++_i) {
+                                if (Combinaties[_i][0] == B && Combinaties[_i][1] == C) {
+                                    CYK_table[length - 1][start].push_back(transities.first[0]);
                                 }
                             }
                         }
@@ -237,6 +321,27 @@ void CFG::accepts(string input) {
         }
     }
 
-    return;
+    // Print de CYK tabel
+    for (int length = n; length >= 1; --length) {
+        for (int start = 0; start <= n - length; ++start) {
+            cout << "| {";
 
+            // Sorteer en verwijder duplicaten
+            vector<string> vars = CYK_table[length - 1][start];
+            sort(vars.begin(), vars.end());
+            vars.erase(unique(vars.begin(), vars.end()), vars.end());
+
+            for (int i = 0; i < vars.size(); ++i) {
+                cout << vars[i];
+                if (i + 1 < vars.size()) cout << ", ";
+            }
+            cout << "}  ";
+        }
+        cout << "|\n";
+    }
+
+    // Check of het startsymbool in de top cel zit
+    vector<string>& top = CYK_table[n - 1][0];
+    bool accepted = find(top.begin(), top.end(), S) != top.end();
+    cout << (accepted ? "true" : "false") << endl;
 }
